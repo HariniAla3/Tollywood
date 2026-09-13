@@ -70,30 +70,27 @@ change to that one file, not to game logic.
 
 ## 4. Data
 
-### 4.1 Sources
+### 4.1 Source
 
-**TMDB is the only source.** The window is 2005–2025 precisely because
-TMDB's Telugu coverage is dependable over that period; the original
-1995–2004 range was what required backfilling from elsewhere.
+**TMDB is the only source.** One API, one ID space, no merging.
 
-Single-sourcing buys more than less code. It removes **cross-source person
-identity reconciliation** — deciding that a TMDB person id and an IMDb
-`nm…` id are the same actor, across thousands of inconsistently
-transliterated Telugu names. That is the most defect-prone work in any
-film-data pipeline, and with one source it does not exist: every person is
-a TMDB id, and cast comparison is integer equality.
+It provides everything the board needs: titles, release year, genres, cast
+**with billing order**, crew by job, and posters. The cast `order` field is
+the foundation of the numbered-cast mechanic — real credit data, not
+something we invent.
 
-TMDB provides titles, release year, genres, cast **with billing order**,
-crew by job, and posters. The `order` field is the foundation of the
-numbered-cast mechanic — real credit data, not something we invent.
+Because every person is a TMDB person id, comparing a guess to the answer
+is integer equality. No name matching, no transliteration handling, no
+reconciling one database's spelling of an actor against another's. That is
+the simplification that keeps this pipeline to a single script.
 
-**Contingency, not plan.** If the counts in section 4.2 come back short,
-the fallbacks in priority order are: (1) hand-fill the missing fields for
-answer-pool films via `overrides.json`, a few hundred rows at most;
-(2) add a Wikidata SPARQL pass, which is strong on Indian cinema and
-especially on music directors; (3) only as a last resort, add the IMDb
-bulk datasets and accept the reconciliation work. Nothing in the schema
-blocks any of these later.
+The 2005–2025 window exists for the same reason: TMDB's Telugu coverage is
+dependable across that period and thins out before it.
+
+**If coverage comes up short**, the fix is `overrides.json` — hand-filling
+missing fields for answer-pool films, a few hundred rows at most. Adding a
+second data source is a decision for later, and deliberately not part of
+this design.
 
 ### 4.2 Build pipeline
 
@@ -286,10 +283,8 @@ mobile when available.
 ## 9. Risks and constraints
 
 **Licensing.** TMDB's free API tier is for **non-commercial** use with
-attribution, which covers this game as designed; attribution appears in
-the footer. Unlike the IMDb bulk datasets — which are non-commercial-only
-with no upgrade path — TMDB offers a commercial licensing route, so
-staying single-sourced keeps a door open should the game ever be
+attribution; attribution appears in the footer. That covers this game as
+designed, and TMDB offers a commercial licensing route should it ever be
 monetized.
 
 **Data quality.** Wrong credits produce unfair puzzles. Mitigations: the
@@ -305,8 +300,8 @@ written, and `overrides.json` absorbs the shortfall if it is small.
 
 **No pre-2005 films.** Accepted scope cost: *Kushi*, *Indra*, *Okkadu* and
 that era are out. Widening the window later is a date change in the build
-script plus a re-run, but the 1995–2004 range would likely reintroduce the
-need for a second source.
+script plus a re-run, though coverage that far back is thin enough to need
+hand-filling.
 
 **Answer visible in bundle.** Accepted, as in section 3.
 
@@ -363,8 +358,8 @@ lifelines, share card, localStorage progress and streak, Past Days'
 archive, deploy to Vercel.
 
 **Phase 2 — depth.** Personal statistics (distribution, win rate), PWA
-install, and whichever section 4.1 contingency the coverage report showed
-was actually needed.
+install, and any `overrides.json` hand-filling the coverage report showed
+was needed.
 
 **Phase 3 — only if warranted.** Swap `repository.ts` to Supabase when
 editing data without redeploying becomes genuinely annoying. Add dialogue
