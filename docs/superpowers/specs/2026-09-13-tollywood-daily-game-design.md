@@ -7,8 +7,7 @@
 
 A daily browser game. One mystery Telugu film per day, the same film for
 every player worldwide. You have 7 attempts (with an option to unlock 3
-more). Every guess must itself be a Telugu film released between 1995 and
-2025.
+more). Every guess must itself be a Telugu film released in 2005 or later.
 
 Each guess is a probe, not a shot in the dark. The game compares the
 guessed film to the mystery film and reveals only what the two have in
@@ -49,7 +48,7 @@ Three parts, only one of which the developer ever runs:
    OCCASIONALLY, ON A LAPTOP              ALWAYS, IN THE BROWSER
    ┌───────────────────────┐             ┌─────────────────────────┐
    │  scripts/build-data   │──writes──▶  │  static React site      │
-   │  TMDB → IMDb → Wikidata│  films.json │  (Vercel, free tier)    │
+   │  TMDB only            │  films.json │  (Vercel, free tier)    │
    │                       │  schedule.json                        │
    └───────────────────────┘             └─────────────────────────┘
                                           localStorage: progress, streak
@@ -73,47 +72,82 @@ change to that one file, not to game logic.
 
 ### 4.1 Sources
 
-Three free sources, layered. None alone covers Telugu cinema 1995–2025.
+**TMDB is the only source.** The window is 2005–2025 precisely because
+TMDB's Telugu coverage is dependable over that period; the original
+1995–2004 range was what required backfilling from elsewhere.
 
-| Source | Role | Provides | Weakness |
-|---|---|---|---|
-| **TMDB API** | Primary | Titles, year, genres, cast **with billing order**, crew by job, posters | Thin before ~2005 and on low-profile films |
-| **IMDb non-commercial datasets** | Coverage backfill | Bulk TSV; `title.akas` filters Telugu, `title.principals` gives billing order and role category | Coarse genres, no posters |
-| **Wikidata SPARQL** | Gap filler | Strong on Indian cinema; especially music directors | Inconsistent completeness |
+Single-sourcing buys more than less code. It removes **cross-source person
+identity reconciliation** — deciding that a TMDB person id and an IMDb
+`nm…` id are the same actor, across thousands of inconsistently
+transliterated Telugu names. That is the most defect-prone work in any
+film-data pipeline, and with one source it does not exist: every person is
+a TMDB id, and cast comparison is integer equality.
 
-TMDB's cast `order` field is the foundation of the numbered-cast
-mechanic. Billing position is real credit data, not something we invent.
+TMDB provides titles, release year, genres, cast **with billing order**,
+crew by job, and posters. The `order` field is the foundation of the
+numbered-cast mechanic — real credit data, not something we invent.
+
+**Contingency, not plan.** If the counts in section 4.2 come back short,
+the fallbacks in priority order are: (1) hand-fill the missing fields for
+answer-pool films via `overrides.json`, a few hundred rows at most;
+(2) add a Wikidata SPARQL pass, which is strong on Indian cinema and
+especially on music directors; (3) only as a last resort, add the IMDb
+bulk datasets and accept the reconciliation work. Nothing in the schema
+blocks any of these later.
 
 ### 4.2 Build pipeline
 
 `scripts/build-data.ts`, run manually, idempotent and re-runnable:
 
 1. TMDB `discover/movie?with_original_language=te` walked across
-   1995-01-01 → 2025-12-31, paginated.
+   2005-01-01 → 2025-12-31, paginated.
 2. TMDB `/movie/{id}/credits` for each film.
-3. IMDb TSV backfill for films TMDB lacks.
-4. Wikidata patch pass, primarily for missing music directors.
-5. Normalize, deduplicate by TMDB/IMDb id, write `src/data/films.json`.
+3. Apply `src/data/overrides.json` last, so a re-run never discards a hand fix.
+4. Apply the section 4.3 gates, write `src/data/films.json`.
+5. **Print a coverage report** and fail loudly if the pools are too small.
 
-Manual corrections live in `src/data/overrides.json` and are applied last,
-so a re-run never discards a hand fix.
+The coverage report is the first deliverable of the whole project, and it
+is what validates the TMDB-only decision empirically rather than on
+assumption. It prints: films returned, how many clear the guessable gate,
+how many clear the answer gate, and a breakdown of which gate rejected
+what — in particular how many films were lost solely for a missing music
+director, since that is the field most likely to be thin.
+
+Target thresholds: **≥1500 guessable and ≥300 answer-eligible.** Below
+those, escalate through the section 4.1 contingencies before building
+further.
 
 ### 4.3 Two pools, not one
 
 This distinction is critical to playability.
 
-- **`isGuessable`** — any 1995–2025 Telugu film with adequate data.
-  Thousands of entries. This is only the autocomplete list; being
-  generous here is good, because obscure guesses should work.
-- **`isMysteryEligible`** — a popularity-gated subset in the low hundreds.
-  Only these are ever the answer.
+- **`isGuessable`** — the autocomplete list. Being generous here is good,
+  because obscure guesses should work.
+- **`isMysteryEligible`** — a popularity-gated subset, in the low
+  hundreds. Only these are ever the answer.
 
-Without the split, the game eventually serves a 1998 film nobody has
-heard of. With it, guessing stays wide open while answers stay fair.
+Without the split, the game eventually serves a film nobody has heard of.
+With it, guessing stays wide open while answers stay fair.
 
-Eligibility for the answer pool additionally requires: at least 6
-credited cast members, at least 2 genres, and a known director and music
-director. Films failing these checks remain guessable.
+**Both pools need quality gates, not just the answer pool.** A guessed
+film's credits are what produce commonalities and Ruled Out entries, so a
+film in the autocomplete with half its cast missing gives *misleading*
+feedback — worse than not being guessable at all. A smaller correct guess
+pool beats a larger broken one.
+
+| Gate | `isGuessable` | `isMysteryEligible` |
+|---|---|---|
+| Release year | 2005–2025 | 2005–2025 |
+| Director | required | required |
+| Credited cast | ≥ 3 | ≥ 6 |
+| Genres | ≥ 1 | ≥ 2 |
+| Music director | not required | **required** |
+| Popularity | none | above threshold, tuned to pool size |
+
+Music director is a hard answer-gate because it is one of only twelve
+cells and the one Telugu audiences care most about; an answer missing it
+plays as a broken puzzle. It is deliberately *not* a guess-gate, since a
+guessed film lacking a composer simply never matches that cell.
 
 ### 4.4 Film record
 
@@ -121,7 +155,6 @@ director. Films failing these checks remain guessable.
 type Film = {
   id: string              // stable internal id
   tmdbId: number
-  imdbId: string | null
   title: string
   titleTelugu: string | null
   aliases: string[]       // alternate spellings, for search only
@@ -139,7 +172,8 @@ type Film = {
 type Person = { id: number; name: string }  // TMDB person id
 ```
 
-People are matched by **id, never by name**, so "Jr NTR" and
+The internal `id` is derived from `tmdbId`. People are matched by
+**id, never by name**, so "Jr NTR" and
 "N. T. Rama Rao Jr." are one person. Name aliases matter only for
 title search.
 
@@ -171,7 +205,7 @@ Twelve cells describing the mystery film. All start hidden. A cell, once
 open, stays open.
 
 ```
-  YEAR     1995 ◄──────────────────────────────► 2025
+  YEAR     2005 ◄──────────────────────────────► 2025
 
   GENRE    [ ??? ] [ ??? ] [ ??? ]
 
@@ -251,19 +285,28 @@ mobile when available.
 
 ## 9. Risks and constraints
 
-**Licensing.** TMDB and the IMDb datasets are free for **non-commercial**
-use with attribution. That covers this game as designed. If it is ever
-monetized, data sourcing must be revisited first. TMDB attribution
-appears in the footer.
+**Licensing.** TMDB's free API tier is for **non-commercial** use with
+attribution, which covers this game as designed; attribution appears in
+the footer. Unlike the IMDb bulk datasets — which are non-commercial-only
+with no upgrade path — TMDB offers a commercial licensing route, so
+staying single-sourced keeps a door open should the game ever be
+monetized.
 
 **Data quality.** Wrong credits produce unfair puzzles. Mitigations: the
 answer pool is small and popularity-gated, completeness checks gate
 eligibility, and `overrides.json` allows permanent hand fixes that survive
 re-runs.
 
-**Pre-2005 coverage.** TMDB is weak here; the IMDb backfill exists
-specifically for this. Films that remain incomplete stay guessable but
-never become answers.
+**Thin music-director coverage.** The likeliest way the TMDB-only bet
+fails. TMDB stores it as the crew job `Original Music Composer`,
+well-populated for major films and patchy for mid-tier ones. The coverage
+report in section 4.2 measures this directly before any game code is
+written, and `overrides.json` absorbs the shortfall if it is small.
+
+**No pre-2005 films.** Accepted scope cost: *Kushi*, *Indra*, *Okkadu* and
+that era are out. Widening the window later is a date change in the build
+script plus a re-run, but the 1995–2004 range would likely reintroduce the
+need for a second source.
 
 **Answer visible in bundle.** Accepted, as in section 3.
 
@@ -273,7 +316,7 @@ Pure logic is separated from React so it can be tested directly.
 
 ```
 scripts/
-  build-data.ts         TMDB → IMDb → Wikidata → films.json
+  build-data.ts         TMDB → gates → films.json + coverage report
   build-schedule.ts     seeded shuffle → schedule.json
 src/
   data/
@@ -319,8 +362,9 @@ Test-driven, per the project's development workflow.
 lifelines, share card, localStorage progress and streak, Past Days'
 archive, deploy to Vercel.
 
-**Phase 2 — depth.** IMDb and Wikidata backfill to widen the pools,
-personal statistics (distribution, win rate), PWA install.
+**Phase 2 — depth.** Personal statistics (distribution, win rate), PWA
+install, and whichever section 4.1 contingency the coverage report showed
+was actually needed.
 
 **Phase 3 — only if warranted.** Swap `repository.ts` to Supabase when
 editing data without redeploying becomes genuinely annoying. Add dialogue
