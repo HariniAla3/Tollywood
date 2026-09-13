@@ -110,9 +110,12 @@ how many clear the answer gate, and a breakdown of which gate rejected
 what — in particular how many films were lost solely for a missing music
 director, since that is the field most likely to be thin.
 
-Target thresholds: **≥1500 guessable and ≥300 answer-eligible.** Below
-those, escalate through the section 4.1 contingencies before building
-further.
+Target thresholds: **≥1500 guessable and ≥300 answer-eligible.**
+
+**Measured 2026-09-13 against live TMDB: 2179 Telugu films discovered,
+1663 guessable, 405 answer-eligible.** Both thresholds clear, confirming
+the TMDB-only decision. The gate values in section 4.3 are the tuned
+result of that measurement, not estimates.
 
 ### 4.3 Two pools, not one
 
@@ -137,14 +140,31 @@ pool beats a larger broken one.
 | Release year | 2005–2025 | 2005–2025 |
 | Director | required | required |
 | Credited cast | ≥ 3 | ≥ 6 |
-| Genres | ≥ 1 | ≥ 2 |
-| Music director | not required | **required** |
-| Popularity | none | above threshold, tuned to pool size |
+| Genres | ≥ 1 | ≥ 1 |
+| Music director | not required | not required |
+| TMDB `vote_count` | none | ≥ 10 |
 
-Music director is a hard answer-gate because it is one of only twelve
-cells and the one Telugu audiences care most about; an answer missing it
-plays as a broken puzzle. It is deliberately *not* a guess-gate, since a
-guessed film lacking a composer simply never matches that cell.
+**Recognition is gated on `vote_count`, not `popularity`.** TMDB's
+`popularity` is a *trending* score, not a fame score: measured live, it
+ranked recent obscurities such as *Plan B* and *April 28th Em Jarigindi*
+above *Pushpa: The Rise*, while *Bommarillu*, *Srimanthudu* and
+*Ye Maaya Chesave* sat near rank 350. `vote_count` ranks the way a fan
+would — RRR, Baahubali, Eega, Pushpa, Arjun Reddy, Rangasthalam, Pokiri.
+A floor of 10 votes yields 405 answers, over a year of daily puzzles.
+
+**Music director is not a gate.** Requiring it was measured to cost
+*Athadu*, *Dookudu*, *Nannaku Prematho* and *Kick* — famous films TMDB
+simply lacks a composer credit for. Excluding a film everyone knows is a
+worse outcome than showing a board without a Music cell, so the cell is
+**conditional**: an answer with no known composer has an 11-cell board.
+Section 4.2's report lists the most-voted films missing a composer, and
+`overrides.json` restores the cell for them; 39 answers with 20+ votes
+need one, a bounded list rather than an open-ended data project.
+
+**Genres need only one.** Requiring two was measured to cost *Magadheera*,
+*Happy Days* and *Gamyam*, which TMDB tags with a single genre. Relaxing
+both gates raises the share of well-known films usable as answers from
+74% to 98%.
 
 ### 4.4 Film record
 
@@ -198,8 +218,10 @@ IST and taking the calendar date.
 
 ## 6. The board
 
-Twelve cells describing the mystery film. All start hidden. A cell, once
-open, stays open.
+Up to twelve cells describing the mystery film. All start hidden. A cell,
+once open, stays open. The count varies with the answer: genre cells equal
+the film's genre count (1–4), and the Music cell is absent when TMDB has no
+composer credit, giving boards of nine to twelve cells.
 
 ```
   YEAR     2005 ◄──────────────────────────────► 2025
@@ -221,7 +243,7 @@ the years are equal, in which case the year is solved and the cell opens.
 
 **Genre** — the mystery film's genres occupy fixed slots in TMDB order.
 Any genre shared with the guess opens that slot. Slot count equals the
-mystery film's genre count (2–4), and is visible from the start; this
+mystery film's genre count (1–4), and is visible from the start; this
 leaks a little information and is accepted in exchange for never
 presenting a cell that cannot be opened.
 
@@ -229,7 +251,9 @@ presenting a cell that cannot be opened.
 guessed film's cast contains a person occupying cell *n*, cell *n* opens.
 Displayed numbers are 1-based; TMDB's `order` is 0-based.
 
-**Crew** — director and music director. Exact person match or nothing. A
+**Crew** — director and music director. Exact person match or nothing. The
+Music cell is omitted entirely when the answer has no known composer, so
+no cell is ever unopenable. A
 person who both directs and acts can open a crew cell and a cast cell from
 a single guess; both open.
 
@@ -292,11 +316,12 @@ answer pool is small and popularity-gated, completeness checks gate
 eligibility, and `overrides.json` allows permanent hand fixes that survive
 re-runs.
 
-**Thin music-director coverage.** The likeliest way the TMDB-only bet
-fails. TMDB stores it as the crew job `Original Music Composer`,
-well-populated for major films and patchy for mid-tier ones. The coverage
-report in section 4.2 measures this directly before any game code is
-written, and `overrides.json` absorbs the shortfall if it is small.
+**Thin music-director coverage — measured, not hypothetical.** TMDB has a
+composer for only about 55% of Telugu films, including 22% of the answer
+pool. This was the biggest surprise of the coverage measurement. It is
+handled by making the cell conditional (section 4.3) rather than by
+excluding films, so it degrades the board slightly instead of shrinking
+the pool. `overrides.json` restores the cell where it matters most.
 
 **No pre-2005 films.** Accepted scope cost: *Kushi*, *Indra*, *Okkadu* and
 that era are out. Widening the window later is a date change in the build

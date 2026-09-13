@@ -21,7 +21,9 @@
 - **No runtime network calls and no backend.** `films.json` and `schedule.json` are build-time artifacts.
 - **The TMDB API key lives in `.env` and is used only by scripts.** It must never appear in the client bundle.
 - **Attribution required:** "This product uses the TMDB API but is not endorsed or certified by TMDB." in the footer.
-- **Thresholds that gate the project:** ≥1500 guessable films, ≥300 answer-eligible. Below these, stop and escalate per spec §4.1.
+- **Thresholds that gate the project:** ≥1500 guessable films, ≥300 answer-eligible. **Already measured against live TMDB on 2026-09-13: 1663 guessable, 405 answer-eligible.** Task 3 re-verifies; a large drop means something broke.
+- **Answer recognition is gated on `vote_count >= 10`, never on `popularity`** — TMDB popularity is a trending score and ranks obscure recent films above *Pushpa*.
+- **Music director is not a gate.** 22% of answers have no composer; their board has 11 cells instead of 12.
 
 ### Deliberate deviations from the spec
 
@@ -82,7 +84,7 @@ src/
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `Person`, `FilmCandidate`, `Film`, `CAST_CELLS`, `CAST_DEPTH`, `FIRST_YEAR`, `LAST_YEAR`, `isGuessable(c: FilmCandidate): boolean`, `isMysteryEligible(c: FilmCandidate, popularityFloor: number): boolean`.
+- Produces: `Person`, `FilmCandidate`, `Film`, `CAST_CELLS`, `CAST_DEPTH`, `FIRST_YEAR`, `LAST_YEAR`, `isGuessable(c: FilmCandidate): boolean`, `isMysteryEligible(c: FilmCandidate, voteFloor: number): boolean`.
 
 - [ ] **Step 1: Scaffold the project**
 
@@ -165,6 +167,8 @@ export type FilmCandidate = {
   cast: Person[]
   posterPath: string | null
   popularity: number
+  /** TMDB rating count -- our recognition signal. See Global Constraints. */
+  voteCount: number
 }
 
 /**
@@ -201,6 +205,7 @@ const candidate = (over: Partial<FilmCandidate> = {}): FilmCandidate => ({
   cast: [person(1), person(2), person(3), person(4), person(5), person(6)],
   posterPath: '/p.jpg',
   popularity: 50,
+  voteCount: 50,
   ...over,
 })
 
@@ -221,6 +226,10 @@ describe('isGuessable', () => {
     expect(isGuessable(candidate({ genres: [] }))).toBe(false)
   })
 
+  it('accepts a film with a single genre', () => {
+    expect(isGuessable(candidate({ genres: ['Action'] }))).toBe(true)
+  })
+
   it('rejects a film outside the year window', () => {
     expect(isGuessable(candidate({ year: 2004 }))).toBe(false)
     expect(isGuessable(candidate({ year: 2026 }))).toBe(false)
@@ -232,12 +241,14 @@ describe('isGuessable', () => {
 })
 
 describe('isMysteryEligible', () => {
-  it('accepts a complete, popular film', () => {
+  it('accepts a complete, well-known film', () => {
     expect(isMysteryEligible(candidate(), 10)).toBe(true)
   })
 
-  it('requires a music director', () => {
-    expect(isMysteryEligible(candidate({ musicDirector: null }), 10)).toBe(false)
+  // Requiring a composer was measured to exclude Athadu, Dookudu and
+  // Nannaku Prematho. Their boards show 11 cells instead of 12.
+  it('does NOT require a music director', () => {
+    expect(isMysteryEligible(candidate({ musicDirector: null }), 10)).toBe(true)
   })
 
   it('requires at least 6 credited cast', () => {
@@ -245,12 +256,21 @@ describe('isMysteryEligible', () => {
     expect(isMysteryEligible(candidate({ cast: five }), 10)).toBe(false)
   })
 
-  it('requires at least 2 genres', () => {
-    expect(isMysteryEligible(candidate({ genres: ['Action'] }), 10)).toBe(false)
+  // Requiring two genres was measured to exclude Magadheera and Happy Days.
+  it('accepts a film with a single genre', () => {
+    expect(isMysteryEligible(candidate({ genres: ['Action'] }), 10)).toBe(true)
   })
 
-  it('rejects films below the popularity floor', () => {
-    expect(isMysteryEligible(candidate({ popularity: 5 }), 10)).toBe(false)
+  it('rejects films below the vote floor', () => {
+    expect(isMysteryEligible(candidate({ voteCount: 9 }), 10)).toBe(false)
+  })
+
+  it('accepts films exactly at the vote floor', () => {
+    expect(isMysteryEligible(candidate({ voteCount: 10 }), 10)).toBe(true)
+  })
+
+  it('ignores popularity entirely', () => {
+    expect(isMysteryEligible(candidate({ popularity: 0 }), 10)).toBe(true)
   })
 
   it('rejects anything that is not guessable', () => {
@@ -281,21 +301,20 @@ export function isGuessable(c: FilmCandidate): boolean {
   )
 }
 
-export function isMysteryEligible(c: FilmCandidate, popularityFloor: number): boolean {
-  return (
-    isGuessable(c) &&
-    c.musicDirector !== null &&
-    c.cast.length >= 6 &&
-    c.genres.length >= 2 &&
-    c.popularity >= popularityFloor
-  )
+/**
+ * Recognition is gated on vote_count, never popularity: TMDB popularity is a
+ * trending score that ranks recent obscurities above Pushpa. A music director
+ * is deliberately NOT required -- see Global Constraints.
+ */
+export function isMysteryEligible(c: FilmCandidate, voteFloor: number): boolean {
+  return isGuessable(c) && c.cast.length >= 6 && c.voteCount >= voteFloor
 }
 ```
 
 - [ ] **Step 7: Run the tests to verify they pass**
 
 Run: `npm test -- src/domain/gates.test.ts`
-Expected: PASS, 12 tests
+Expected: PASS, 15 tests
 
 - [ ] **Step 8: Commit**
 
@@ -336,6 +355,7 @@ const movie = {
   genre_ids: [28, 18],
   poster_path: '/poster.jpg',
   popularity: 42.5,
+  vote_count: 85,
 }
 
 const credits = {
@@ -360,6 +380,7 @@ describe('toCandidate', () => {
     expect(c.year).toBe(2018)
     expect(c.posterPath).toBe('/poster.jpg')
     expect(c.popularity).toBe(42.5)
+    expect(c.voteCount).toBe(85)
   })
 
   it('resolves genre ids to names in the order given', () => {
@@ -448,6 +469,7 @@ export type TmdbMovie = {
   genre_ids: number[]
   poster_path: string | null
   popularity: number
+  vote_count: number
 }
 
 export type TmdbCredits = {
@@ -541,6 +563,7 @@ export function toCandidate(
       .map((c) => ({ id: c.id, name: c.name })),
     posterPath: movie.poster_path,
     popularity: movie.popularity,
+    voteCount: movie.vote_count,
   }
 }
 ```
@@ -548,7 +571,7 @@ export function toCandidate(
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `npm test -- scripts/tmdb.test.ts`
-Expected: PASS, 10 tests
+Expected: PASS, 10 tests (the first now also asserts voteCount)
 
 - [ ] **Step 5: Commit**
 
@@ -569,7 +592,7 @@ git commit -m "feat: add TMDB client and candidate mapping"
 
 **Interfaces:**
 - Consumes: `discoverTeluguFilms`, `fetchCredits`, `fetchGenreMap`, `toCandidate` from `scripts/tmdb`; `isGuessable`, `isMysteryEligible` from `src/domain/gates`.
-- Produces: `applyOverrides(c: FilmCandidate, overrides: OverrideMap): FilmCandidate`, `buildCoverage(candidates: FilmCandidate[], popularityFloor: number): Coverage`, `formatCoverage(c: Coverage): string`, and the generated `src/data/films.json`.
+- Produces: `applyOverrides(c: FilmCandidate, overrides: OverrideMap): FilmCandidate`, `buildCoverage(candidates: FilmCandidate[], voteFloor: number): Coverage`, `formatCoverage(c: Coverage): string`, and the generated `src/data/films.json`.
 
 **This is the project's first real deliverable.** The coverage report is what decides whether the TMDB-only bet holds. Do not proceed past this task if the thresholds fail — escalate per spec §4.1 instead.
 
@@ -597,6 +620,7 @@ const candidate = (over: Partial<FilmCandidate> = {}): FilmCandidate => ({
   cast: [1, 2, 3, 4, 5, 6].map(person),
   posterPath: null,
   popularity: 50,
+  voteCount: 50,
   ...over,
 })
 
@@ -629,7 +653,7 @@ describe('applyOverrides', () => {
 describe('buildCoverage', () => {
   it('counts total, guessable, and answer-eligible films', () => {
     const cov = buildCoverage(
-      [candidate({ id: 'a' }), candidate({ id: 'b', popularity: 1 }), candidate({ id: 'c', director: null })],
+      [candidate({ id: 'a' }), candidate({ id: 'b', voteCount: 1 }), candidate({ id: 'c', director: null })],
       10,
     )
     expect(cov.total).toBe(3)
@@ -637,14 +661,14 @@ describe('buildCoverage', () => {
     expect(cov.mysteryEligible).toBe(1)
   })
 
-  it('reports how many films were lost solely to a missing music director', () => {
+  it('still counts a composerless film as answer-eligible', () => {
     const cov = buildCoverage([candidate({ musicDirector: null })], 10)
-    expect(cov.lostOnlyToMusicDirector).toBe(1)
+    expect(cov.mysteryEligible).toBe(1)
   })
 
-  it('does not count a film as lost-only-to-music when it also fails another gate', () => {
-    const cov = buildCoverage([candidate({ musicDirector: null, genres: ['Action'] })], 10)
-    expect(cov.lostOnlyToMusicDirector).toBe(0)
+  it('reports how many answers will show an 11-cell board', () => {
+    const cov = buildCoverage([candidate({ musicDirector: null }), candidate({ id: 'b' })], 10)
+    expect(cov.answersMissingComposer).toBe(1)
   })
 
   it('breaks down guess-gate rejections by reason', () => {
@@ -685,6 +709,12 @@ import { FIRST_YEAR, LAST_YEAR, type FilmCandidate } from '../src/domain/types'
 export const MIN_GUESSABLE = 1500
 export const MIN_MYSTERY = 300
 
+/**
+ * Measured 2026-09-13 against live TMDB: a floor of 10 votes gives 405
+ * answers (over a year of puzzles) and ranks the way a fan would.
+ */
+export const VOTE_FLOOR = 10
+
 export type OverrideMap = Record<string, Partial<FilmCandidate>>
 
 export function applyOverrides(c: FilmCandidate, overrides: OverrideMap): FilmCandidate {
@@ -696,7 +726,8 @@ export type Coverage = {
   total: number
   guessable: number
   mysteryEligible: number
-  lostOnlyToMusicDirector: number
+  /** Answers whose board will show 11 cells rather than 12. */
+  answersMissingComposer: number
   rejected: {
     outOfWindow: number
     noDirector: number
@@ -706,24 +737,18 @@ export type Coverage = {
   meetsThresholds: boolean
 }
 
-export function buildCoverage(candidates: FilmCandidate[], popularityFloor: number): Coverage {
+export function buildCoverage(candidates: FilmCandidate[], voteFloor: number): Coverage {
   const rejected = { outOfWindow: 0, noDirector: 0, tooFewCast: 0, noGenres: 0 }
   let guessable = 0
   let mysteryEligible = 0
-  let lostOnlyToMusicDirector = 0
+  let answersMissingComposer = 0
 
   for (const c of candidates) {
     if (isGuessable(c)) {
       guessable++
-      if (isMysteryEligible(c, popularityFloor)) {
+      if (isMysteryEligible(c, voteFloor)) {
         mysteryEligible++
-      } else if (
-        c.musicDirector === null &&
-        c.cast.length >= 6 &&
-        c.genres.length >= 2 &&
-        c.popularity >= popularityFloor
-      ) {
-        lostOnlyToMusicDirector++
+        if (c.musicDirector === null) answersMissingComposer++
       }
     } else {
       if (c.year < FIRST_YEAR || c.year > LAST_YEAR) rejected.outOfWindow++
@@ -737,7 +762,7 @@ export function buildCoverage(candidates: FilmCandidate[], popularityFloor: numb
     total: candidates.length,
     guessable,
     mysteryEligible,
-    lostOnlyToMusicDirector,
+    answersMissingComposer,
     rejected,
     meetsThresholds: guessable >= MIN_GUESSABLE && mysteryEligible >= MIN_MYSTERY,
   }
@@ -752,8 +777,8 @@ export function formatCoverage(c: Coverage): string {
     `  Guessable                 ${c.guessable}   (need ${MIN_GUESSABLE})`,
     `  Answer-eligible           ${c.mysteryEligible}   (need ${MIN_MYSTERY})`,
     '',
-    `  Lost only to missing music director   ${c.lostOnlyToMusicDirector}`,
-    '    ^ these are recoverable via src/data/overrides.json',
+    `  Answers with no composer  ${c.answersMissingComposer}   (these boards show 11 cells)`,
+    '    ^ add composers in src/data/overrides.json to restore the 12th cell',
     '',
     '  Guess-gate rejections',
     `    outside 2005-2025       ${c.rejected.outOfWindow}`,
@@ -794,11 +819,8 @@ import { isGuessable, isMysteryEligible } from '../src/domain/gates'
 import { discoverTeluguFilms, fetchCredits, fetchGenreMap, toCandidate } from './tmdb'
 import { applyOverrides, buildCoverage, formatCoverage, type OverrideMap } from './coverage'
 
-/**
- * Popularity floor for the answer pool. Tuned against the coverage report:
- * raise it if the pool is far above 300, lower it if short.
- */
-const POPULARITY_FLOOR = 8
+
+import { VOTE_FLOOR } from './coverage'
 
 async function main() {
   const apiKey = process.env.TMDB_API_KEY
@@ -821,13 +843,13 @@ async function main() {
     }
   }
 
-  const coverage = buildCoverage(candidates, POPULARITY_FLOOR)
+  const coverage = buildCoverage(candidates, VOTE_FLOOR)
   process.stdout.write(formatCoverage(coverage))
 
   const films: Film[] = candidates.filter(isGuessable).map((c) => ({
     ...c,
     director: c.director!,
-    isMysteryEligible: isMysteryEligible(c, POPULARITY_FLOOR),
+    isMysteryEligible: isMysteryEligible(c, VOTE_FLOOR),
   }))
 
   films.sort((a, b) => a.id.localeCompare(b.id))
@@ -1387,6 +1409,7 @@ const film = (over: Partial<Film> = {}): Film => ({
   cast: [1, 2, 3, 4, 5, 6].map((n) => p(n)),
   posterPath: null,
   popularity: 50,
+  voteCount: 50,
   isMysteryEligible: true,
   ...over,
 })
@@ -1684,6 +1707,7 @@ const answer: Film = {
   cast: [1, 2, 3, 4, 5, 6].map(p),
   posterPath: null,
   popularity: 50,
+  voteCount: 50,
   isMysteryEligible: true,
 }
 
@@ -1705,6 +1729,16 @@ describe('createBoard', () => {
 
   it('creates six cast cells', () => {
     expect(createBoard(answer).cast).toHaveLength(6)
+  })
+
+  it('omits the music cell when the film has no composer', () => {
+    const b = createBoard({ ...answer, musicDirector: null })
+    expect(b.musicDirector).toBeNull()
+    expect(cellStates(b)).toHaveLength(10)
+  })
+
+  it('includes the music cell when the film has a composer', () => {
+    expect(cellStates(createBoard(answer))).toHaveLength(11)
   })
 })
 
@@ -1798,6 +1832,12 @@ describe('hiddenCells', () => {
     const b = applyReveals(createBoard(answer), [{ kind: 'cast', slot: 0, person: p(1) }])
     expect(hiddenCells(b)).toHaveLength(10)
   })
+
+  it('never offers a music cell that does not exist', () => {
+    const b = createBoard({ ...answer, musicDirector: null })
+    expect(hiddenCells(b)).toHaveLength(10)
+    expect(hiddenCells(b)).not.toContainEqual({ kind: 'crew', role: 'musicDirector' })
+  })
 })
 
 describe('revealAll', () => {
@@ -1837,7 +1877,9 @@ export type Board = {
   genres: ValueCell<string>[]
   cast: ValueCell<Person>[]
   director: ValueCell<Person>
-  musicDirector: ValueCell<Person | null>
+  /** null when TMDB has no composer for this film -- the cell is omitted
+   *  entirely rather than rendered as one that can never open. */
+  musicDirector: ValueCell<Person> | null
 }
 
 export function createBoard(answer: Film): Board {
@@ -1849,7 +1891,9 @@ export function createBoard(answer: Film): Board {
       .slice(0, CAST_CELLS)
       .map((value) => ({ value, state: 'hidden' as CellState })),
     director: { value: answer.director, state: 'hidden' },
-    musicDirector: { value: answer.musicDirector, state: 'hidden' },
+    musicDirector: answer.musicDirector
+      ? { value: answer.musicDirector, state: 'hidden' }
+      : null,
   }
 }
 
@@ -1860,7 +1904,7 @@ function clone(b: Board): Board {
     genres: b.genres.map((c) => ({ ...c })),
     cast: b.cast.map((c) => ({ ...c })),
     director: { ...b.director },
-    musicDirector: { ...b.musicDirector },
+    musicDirector: b.musicDirector ? { ...b.musicDirector } : null,
   }
 }
 
@@ -1886,9 +1930,11 @@ export function applyReveals(board: Board, reveals: Reveal[]): Board {
       case 'cast':
         if (b.cast[r.slot].state === 'hidden') b.cast[r.slot].state = 'matched'
         break
-      case 'crew':
-        if (b[r.role].state === 'hidden') b[r.role].state = 'matched'
+      case 'crew': {
+        const cell = b[r.role]
+        if (cell && cell.state === 'hidden') cell.state = 'matched'
         break
+      }
     }
   }
 
@@ -1912,9 +1958,11 @@ export function revealCell(board: Board, ref: CellRef): Board {
     case 'cast':
       if (b.cast[ref.slot].state === 'hidden') b.cast[ref.slot].state = 'lifeline'
       break
-    case 'crew':
-      if (b[ref.role].state === 'hidden') b[ref.role].state = 'lifeline'
+    case 'crew': {
+      const cell = b[ref.role]
+      if (cell && cell.state === 'hidden') cell.state = 'lifeline'
       break
+    }
   }
 
   return b
@@ -1930,7 +1978,7 @@ export function hiddenCells(board: Board): CellRef[] {
     if (c.state === 'hidden') out.push({ kind: 'cast', slot })
   })
   if (board.director.state === 'hidden') out.push({ kind: 'crew', role: 'director' })
-  if (board.musicDirector.state === 'hidden') out.push({ kind: 'crew', role: 'musicDirector' })
+  if (board.musicDirector?.state === 'hidden') out.push({ kind: 'crew', role: 'musicDirector' })
   return out
 }
 
@@ -1945,7 +1993,7 @@ export function cellStates(board: Board): CellState[] {
     ...board.genres.map((c) => c.state),
     ...board.cast.map((c) => c.state),
     board.director.state,
-    board.musicDirector.state,
+    ...(board.musicDirector ? [board.musicDirector.state] : []),
   ]
 }
 ```
@@ -1953,7 +2001,7 @@ export function cellStates(board: Board): CellState[] {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `npm test -- src/domain/board.test.ts`
-Expected: PASS, 18 tests
+Expected: PASS, 21 tests
 
 - [ ] **Step 5: Commit**
 
@@ -2218,6 +2266,7 @@ const film = (over: Partial<Film> = {}): Film => ({
   cast: [1, 2, 3, 4, 5, 6].map(p),
   posterPath: null,
   popularity: 50,
+  voteCount: 50,
   isMysteryEligible: true,
   ...over,
 })
@@ -2924,6 +2973,7 @@ const film = (id: string, title: string, over: Partial<Film> = {}): Film => ({
   cast: [p(1), p(2), p(3)],
   posterPath: null,
   popularity: 10,
+  voteCount: 10,
   isMysteryEligible: false,
   ...over,
 })
@@ -3114,6 +3164,7 @@ const film = (over: Partial<Film> = {}): Film => ({
   cast: [1, 2, 3, 4, 5, 6].map((n) => p(n)),
   posterPath: null,
   popularity: 50,
+  voteCount: 50,
   isMysteryEligible: true,
   ...over,
 })
@@ -3187,6 +3238,13 @@ describe('buildShareCard', () => {
     expect(buildShareCard(s, 0)).not.toContain('🔥')
   })
 
+  it('drops the music square when the film has no composer', () => {
+    const noMusic = { ...answer, musicDirector: null }
+    const s = submitGuess(startSession('2026-01-01', noMusic), noMusic)
+    const grid = buildShareCard(s, 1).split('\n').filter((l) => /^[🟩🟨⬜]+$/u.test(l))
+    expect(grid.map((l) => [...l].length)).toEqual([1, 2, 3, 3, 1])
+  })
+
   it('leaks nothing about the answer', () => {
     let s = startSession('2026-01-01', answer)
     for (let i = 1; i <= 7; i++) s = submitGuess(s, miss(i))
@@ -3222,7 +3280,9 @@ const SQUARE: Record<CellState, string> = {
 export function buildShareCard(session: Session, streak: number): string {
   const squares = cellStates(session.board).map((s) => SQUARE[s])
 
-  // Board order: year(1), genres(n), cast(6 as two rows of three), crew(2).
+  // Board order: year(1), genres(n), cast(6 as two rows of three), crew(1 or 2).
+  // cellStates() already omits an absent Music cell, so the crew row is
+  // whatever remains after the cast.
   const genreCount = session.board.genres.length
   const castStart = 1 + genreCount
   const crewStart = castStart + session.board.cast.length
@@ -3253,7 +3313,7 @@ export function buildShareCard(session: Session, streak: number): string {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `npm test -- src/domain/share.test.ts`
-Expected: PASS, 10 tests
+Expected: PASS, 11 tests
 
 - [ ] **Step 5: Run the whole domain suite**
 
@@ -3317,6 +3377,7 @@ const answer: Film = {
   ],
   posterPath: null,
   popularity: 50,
+  voteCount: 50,
   isMysteryEligible: true,
 }
 
@@ -3375,6 +3436,23 @@ describe('BoardView', () => {
     )
     expect(container.querySelector('.cell--matched')).toBeTruthy()
     expect(container.querySelector('.cell--lifeline')).toBeTruthy()
+  })
+
+  it('renders no Music cell when the film has no composer', () => {
+    render(
+      <BoardView board={createBoard({ ...answer, musicDirector: null })}
+        selecting={false} onPick={() => {}} />,
+    )
+    expect(screen.queryByText('Music')).not.toBeInTheDocument()
+    expect(screen.getByText('Director')).toBeInTheDocument()
+  })
+
+  it('offers only ten pickable cells when there is no Music cell', () => {
+    render(
+      <BoardView board={createBoard({ ...answer, musicDirector: null })}
+        selecting onPick={() => {}} />,
+    )
+    expect(screen.getAllByRole('button')).toHaveLength(10)
   })
 
   it('does not offer cells as buttons outside selection mode', () => {
@@ -3524,13 +3602,15 @@ export function BoardView({ board, selecting, onPick }: Props) {
             pickable={pick({ kind: 'crew', role: 'director' }, board.director.state)}
             onPick={() => onPick({ kind: 'crew', role: 'director' })}
           />
-          <Cell
-            label="Music"
-            value={board.musicDirector.value?.name ?? '—'}
-            state={board.musicDirector.state}
-            pickable={pick({ kind: 'crew', role: 'musicDirector' }, board.musicDirector.state)}
-            onPick={() => onPick({ kind: 'crew', role: 'musicDirector' })}
-          />
+          {board.musicDirector && (
+            <Cell
+              label="Music"
+              value={board.musicDirector.value.name}
+              state={board.musicDirector.state}
+              pickable={pick({ kind: 'crew', role: 'musicDirector' }, board.musicDirector.state)}
+              onPick={() => onPick({ kind: 'crew', role: 'musicDirector' })}
+            />
+          )}
         </div>
       </section>
     </div>
@@ -3603,7 +3683,7 @@ import './ui/styles.css'
 - [ ] **Step 6: Run the test to verify it passes**
 
 Run: `npm test -- src/ui/Board.test.tsx`
-Expected: PASS, 10 tests
+Expected: PASS, 12 tests
 
 - [ ] **Step 7: Commit**
 
@@ -3642,7 +3722,7 @@ const p = (id: number): Person => ({ id, name: `P${id}` })
 const film = (id: string, title: string, year = 2018): Film => ({
   id, tmdbId: Number(id.replace('f_', '')), title, titleTelugu: null, aliases: [],
   year, genres: ['Action'], director: p(1), musicDirector: p(2),
-  cast: [p(3), p(4), p(5)], posterPath: null, popularity: 10, isMysteryEligible: false,
+  cast: [p(3), p(4), p(5)], posterPath: null, popularity: 10, voteCount: 10, isMysteryEligible: false,
 })
 
 const films = [
@@ -3898,7 +3978,7 @@ const p = (id: number): Person => ({ id, name: `P${id}` })
 const answer: Film = {
   id: 'f_a', tmdbId: 1, title: 'Answer', titleTelugu: null, aliases: [],
   year: 2018, genres: ['Action', 'Drama'], director: p(100), musicDirector: p(200),
-  cast: [1, 2, 3, 4, 5, 6].map(p), posterPath: null, popularity: 50, isMysteryEligible: true,
+  cast: [1, 2, 3, 4, 5, 6].map(p), posterPath: null, popularity: 50, voteCount: 50, isMysteryEligible: true,
 }
 
 const wrong: Film = { ...answer, id: 'f_b', title: 'Wrong', year: 2006, genres: ['Horror'],
@@ -4156,7 +4236,7 @@ const p = (id: number, name = `P${id}`): Person => ({ id, name })
 const answer: Film = {
   id: 'f_a', tmdbId: 1, title: 'Rangasthalam', titleTelugu: null, aliases: [],
   year: 2018, genres: ['Action', 'Drama'], director: p(100), musicDirector: p(200),
-  cast: [1, 2, 3, 4, 5, 6].map((n) => p(n)), posterPath: null, popularity: 50, isMysteryEligible: true,
+  cast: [1, 2, 3, 4, 5, 6].map((n) => p(n)), posterPath: null, popularity: 50, voteCount: 50, isMysteryEligible: true,
 }
 const wrong: Film = { ...answer, id: 'f_b', title: 'Pokiri', year: 2006, genres: ['Crime'],
   director: p(900), musicDirector: p(901), cast: [p(800)] }
@@ -4556,7 +4636,7 @@ const p = (id: number, name = `P${id}`): Person => ({ id, name })
 const answer: Film = {
   id: 'f_a', tmdbId: 1, title: 'Rangasthalam', titleTelugu: null, aliases: [],
   year: 2018, genres: ['Action', 'Drama'], director: p(100, 'Sukumar'), musicDirector: p(200, 'DSP'),
-  cast: [1, 2, 3, 4, 5, 6].map((n) => p(n)), posterPath: null, popularity: 50, isMysteryEligible: true,
+  cast: [1, 2, 3, 4, 5, 6].map((n) => p(n)), posterPath: null, popularity: 50, voteCount: 50, isMysteryEligible: true,
 }
 const other: Film = { ...answer, id: 'f_b', title: 'Pokiri', year: 2006, genres: ['Crime'],
   director: p(900, 'Puri'), musicDirector: p(901, 'Mani'), cast: [p(800, 'Mahesh Babu')] }
@@ -4898,7 +4978,7 @@ import filmsJson from './films.json'
 import scheduleJson from './schedule.json'
 import { isMysteryEligible } from '../domain/gates'
 import { FIRST_YEAR, LAST_YEAR, type Film } from '../domain/types'
-import { MIN_GUESSABLE, MIN_MYSTERY } from '../../scripts/coverage'
+import { MIN_GUESSABLE, MIN_MYSTERY, VOTE_FLOOR } from '../../scripts/coverage'
 
 const films = filmsJson as Film[]
 const schedule = scheduleJson as Record<string, string>
@@ -4936,8 +5016,21 @@ describe('films.json', () => {
     for (const f of films) expect(f.cast.length).toBeLessThanOrEqual(10)
   })
 
-  it('gives every answer-eligible film a full set of cells', () => {
-    for (const f of answers) expect(isMysteryEligible(f, 0)).toBe(true)
+  it('keeps every answer-eligible film above the vote floor', () => {
+    for (const f of answers) expect(isMysteryEligible(f, VOTE_FLOOR)).toBe(true)
+  })
+
+  it('gives every answer at least 6 cast and 1 genre', () => {
+    for (const f of answers) {
+      expect(f.cast.length).toBeGreaterThanOrEqual(6)
+      expect(f.genres.length).toBeGreaterThanOrEqual(1)
+    }
+  })
+
+  it('reports how many answers lack a composer, without failing on it', () => {
+    const missing = answers.filter((f) => f.musicDirector === null).length
+    // Measured at ~22% on 2026-09-13. A sharp rise means the import broke.
+    expect(missing / answers.length).toBeLessThan(0.4)
   })
 
   it('has no duplicate people within one film’s cast', () => {
@@ -4983,7 +5076,7 @@ describe('schedule.json', () => {
 Run: `npm test -- src/data/integrity.test.ts`
 Expected: PASS.
 
-If the 90-day repeat test fails, the answer pool is smaller than 90 films and the schedule is cycling too fast — return to Task 3 and lower `POPULARITY_FLOOR`.
+If the 90-day repeat test fails, the answer pool is smaller than 90 films and the schedule is cycling too fast — return to Task 3 and lower `VOTE_FLOOR`.
 
 - [ ] **Step 3: Verify a production build**
 
