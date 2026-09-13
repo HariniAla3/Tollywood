@@ -21,9 +21,10 @@
 - **No runtime network calls and no backend.** `films.json` and `schedule.json` are build-time artifacts.
 - **The TMDB API key lives in `.env` and is used only by scripts.** It must never appear in the client bundle.
 - **Attribution required:** "This product uses the TMDB API but is not endorsed or certified by TMDB." in the footer.
-- **Thresholds that gate the project:** ≥1500 guessable films, ≥300 answer-eligible. **Already measured against live TMDB on 2026-09-13: 1663 guessable, 405 answer-eligible.** Task 3 re-verifies; a large drop means something broke.
+- **Thresholds that gate the project:** ≥1500 guessable films, ≥300 answer-eligible. **Already measured against live TMDB on 2026-09-13: 1663 guessable, 395 answer-eligible.** Task 3 re-verifies; a large drop means something broke.
 - **Answer recognition is gated on `vote_count >= 10`, never on `popularity`** — TMDB popularity is a trending score and ranks obscure recent films above *Pushpa*.
-- **Music director is not a gate.** 22% of answers have no composer; their board has 11 cells instead of 12.
+- **Music director IS required for answers**, resolved across the ordered crew-job list `Original Music Composer` → `Music` → `Music Director` → `Composer`. **`Playback Singer` is never a composer** — it is the most common music job on these films and accepting it would credit *Athadu* to S. P. Balasubramaniam.
+- **Measured final pools: 1663 guessable, 395 answer-eligible**, every answer board carrying all 12 cell types.
 
 ### Deliberate deviations from the spec
 
@@ -245,10 +246,8 @@ describe('isMysteryEligible', () => {
     expect(isMysteryEligible(candidate(), 10)).toBe(true)
   })
 
-  // Requiring a composer was measured to exclude Athadu, Dookudu and
-  // Nannaku Prematho. Their boards show 11 cells instead of 12.
-  it('does NOT require a music director', () => {
-    expect(isMysteryEligible(candidate({ musicDirector: null }), 10)).toBe(true)
+  it('requires a music director', () => {
+    expect(isMysteryEligible(candidate({ musicDirector: null }), 10)).toBe(false)
   })
 
   it('requires at least 6 credited cast', () => {
@@ -303,11 +302,19 @@ export function isGuessable(c: FilmCandidate): boolean {
 
 /**
  * Recognition is gated on vote_count, never popularity: TMDB popularity is a
- * trending score that ranks recent obscurities above Pushpa. A music director
- * is deliberately NOT required -- see Global Constraints.
+ * trending score that ranks recent obscurities above Pushpa.
+ *
+ * A music director is required. That is only affordable because toCandidate()
+ * resolves the composer across several crew-job spellings -- searching just
+ * "Original Music Composer" would drop Athadu, Dookudu and Nannaku Prematho.
  */
 export function isMysteryEligible(c: FilmCandidate, voteFloor: number): boolean {
-  return isGuessable(c) && c.cast.length >= 6 && c.voteCount >= voteFloor
+  return (
+    isGuessable(c) &&
+    c.cast.length >= 6 &&
+    c.musicDirector !== null &&
+    c.voteCount >= voteFloor
+  )
 }
 ```
 
@@ -426,6 +433,45 @@ describe('toCandidate', () => {
     })
   })
 
+  // TMDB credits Indian composers under "Music" far more often than under
+  // "Original Music Composer" -- this is how Athadu and Dookudu are recovered.
+  it('falls back to the Music job', () => {
+    const crew = [
+      { id: 10, name: 'Sukumar', job: 'Director' },
+      { id: 20, name: 'Mani Sharma', job: 'Music' },
+    ]
+    expect(toCandidate(movie, { cast: credits.cast, crew }, genreNames).musicDirector)
+      .toEqual({ id: 20, name: 'Mani Sharma' })
+  })
+
+  it('falls back to the Music Director job', () => {
+    const crew = [{ id: 21, name: 'Keeravani', job: 'Music Director' }]
+    expect(toCandidate(movie, { cast: credits.cast, crew }, genreNames).musicDirector)
+      .toEqual({ id: 21, name: 'Keeravani' })
+  })
+
+  it('prefers Original Music Composer over the fallbacks', () => {
+    const crew = [
+      { id: 20, name: 'Wrong Person', job: 'Music' },
+      { id: 11, name: 'Devi Sri Prasad', job: 'Original Music Composer' },
+    ]
+    expect(toCandidate(movie, { cast: credits.cast, crew }, genreNames).musicDirector?.id)
+      .toBe(11)
+  })
+
+  // Playback Singer is the most common music job on these films. Accepting it
+  // would credit Athadu to S. P. Balasubramaniam instead of Mani Sharma.
+  it('never treats a Playback Singer as the composer', () => {
+    const crew = [
+      { id: 30, name: 'S. P. Balasubramaniam', job: 'Playback Singer' },
+      { id: 31, name: 'Someone', job: 'Music Programmer' },
+      { id: 32, name: 'Another', job: 'Music Arranger' },
+      { id: 33, name: 'Third', job: 'Sound Designer' },
+    ]
+    expect(toCandidate(movie, { cast: credits.cast, crew }, genreNames).musicDirector)
+      .toBeNull()
+  })
+
   it('returns null crew when the job is absent', () => {
     const c = toCandidate(movie, { cast: credits.cast, crew: [] }, genreNames)
     expect(c.director).toBeNull()
@@ -533,9 +579,34 @@ export async function fetchCredits(apiKey: string, tmdbId: number): Promise<Tmdb
   return get<TmdbCredits>(apiKey, `/movie/${tmdbId}/credits`, {})
 }
 
+/**
+ * Composer job spellings in priority order. TMDB credits Indian composers
+ * under "Music" or "Music Director" far more often than under the canonical
+ * "Original Music Composer": searching only the canonical job finds a
+ * composer on 55% of Telugu films, this list finds one on 97%.
+ *
+ * Deliberately absent: Playback Singer (a singer, not the composer -- and the
+ * most common music job on these films), Music Programmer, Music Arranger,
+ * and every Sound department job.
+ */
+const COMPOSER_JOBS = [
+  'Original Music Composer',
+  'Music',
+  'Music Director',
+  'Composer',
+] as const
+
 function crewMember(credits: TmdbCredits, job: string): Person | null {
   const found = credits.crew.find((c) => c.job === job)
   return found ? { id: found.id, name: found.name } : null
+}
+
+function composer(credits: TmdbCredits): Person | null {
+  for (const job of COMPOSER_JOBS) {
+    const found = crewMember(credits, job)
+    if (found) return found
+  }
+  return null
 }
 
 export function toCandidate(
@@ -556,7 +627,7 @@ export function toCandidate(
       .map((id) => genreNames.get(id))
       .filter((n): n is string => n !== undefined),
     director: crewMember(credits, 'Director'),
-    musicDirector: crewMember(credits, 'Original Music Composer'),
+    musicDirector: composer(credits),
     cast: [...credits.cast]
       .sort((a, b) => a.order - b.order)
       .slice(0, CAST_DEPTH)
@@ -571,7 +642,7 @@ export function toCandidate(
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `npm test -- scripts/tmdb.test.ts`
-Expected: PASS, 10 tests (the first now also asserts voteCount)
+Expected: PASS, 14 tests
 
 - [ ] **Step 5: Commit**
 
@@ -661,14 +732,15 @@ describe('buildCoverage', () => {
     expect(cov.mysteryEligible).toBe(1)
   })
 
-  it('still counts a composerless film as answer-eligible', () => {
+  it('excludes a composerless film from the answer pool', () => {
     const cov = buildCoverage([candidate({ musicDirector: null })], 10)
-    expect(cov.mysteryEligible).toBe(1)
+    expect(cov.mysteryEligible).toBe(0)
   })
 
-  it('reports how many answers will show an 11-cell board', () => {
+  it('reports how many answers were lost to a missing composer', () => {
     const cov = buildCoverage([candidate({ musicDirector: null }), candidate({ id: 'b' })], 10)
-    expect(cov.answersMissingComposer).toBe(1)
+    expect(cov.lostToMissingComposer).toBe(1)
+    expect(cov.mysteryEligible).toBe(1)
   })
 
   it('breaks down guess-gate rejections by reason', () => {
@@ -726,8 +798,8 @@ export type Coverage = {
   total: number
   guessable: number
   mysteryEligible: number
-  /** Answers whose board will show 11 cells rather than 12. */
-  answersMissingComposer: number
+  /** Would be answers, but no composer credit exists under any job name. */
+  lostToMissingComposer: number
   rejected: {
     outOfWindow: number
     noDirector: number
@@ -741,14 +813,15 @@ export function buildCoverage(candidates: FilmCandidate[], voteFloor: number): C
   const rejected = { outOfWindow: 0, noDirector: 0, tooFewCast: 0, noGenres: 0 }
   let guessable = 0
   let mysteryEligible = 0
-  let answersMissingComposer = 0
+  let lostToMissingComposer = 0
 
   for (const c of candidates) {
     if (isGuessable(c)) {
       guessable++
       if (isMysteryEligible(c, voteFloor)) {
         mysteryEligible++
-        if (c.musicDirector === null) answersMissingComposer++
+      } else if (c.musicDirector === null && c.cast.length >= 6 && c.voteCount >= voteFloor) {
+        lostToMissingComposer++
       }
     } else {
       if (c.year < FIRST_YEAR || c.year > LAST_YEAR) rejected.outOfWindow++
@@ -762,7 +835,7 @@ export function buildCoverage(candidates: FilmCandidate[], voteFloor: number): C
     total: candidates.length,
     guessable,
     mysteryEligible,
-    answersMissingComposer,
+    lostToMissingComposer,
     rejected,
     meetsThresholds: guessable >= MIN_GUESSABLE && mysteryEligible >= MIN_MYSTERY,
   }
@@ -777,8 +850,8 @@ export function formatCoverage(c: Coverage): string {
     `  Guessable                 ${c.guessable}   (need ${MIN_GUESSABLE})`,
     `  Answer-eligible           ${c.mysteryEligible}   (need ${MIN_MYSTERY})`,
     '',
-    `  Answers with no composer  ${c.answersMissingComposer}   (these boards show 11 cells)`,
-    '    ^ add composers in src/data/overrides.json to restore the 12th cell',
+    `  Lost to a missing composer  ${c.lostToMissingComposer}   (measured: 10)`,
+    '    ^ recoverable by adding them to src/data/overrides.json',
     '',
     '  Guess-gate rejections',
     `    outside 2005-2025       ${c.rejected.outOfWindow}`,
@@ -1731,6 +1804,8 @@ describe('createBoard', () => {
     expect(createBoard(answer).cast).toHaveLength(6)
   })
 
+  // Defensive only: the answer gates guarantee a composer. This pins the
+  // degradation path so a bad override cannot crash the board.
   it('omits the music cell when the film has no composer', () => {
     const b = createBoard({ ...answer, musicDirector: null })
     expect(b.musicDirector).toBeNull()
@@ -1877,8 +1952,11 @@ export type Board = {
   genres: ValueCell<string>[]
   cast: ValueCell<Person>[]
   director: ValueCell<Person>
-  /** null when TMDB has no composer for this film -- the cell is omitted
-   *  entirely rather than rendered as one that can never open. */
+  /**
+   * The answer gates guarantee a composer, so this is non-null for every real
+   * puzzle. The null path is defensive -- it keeps a bad hand-written override
+   * from crashing the board, degrading to an 11-cell layout instead.
+   */
   musicDirector: ValueCell<Person> | null
 }
 
@@ -5027,10 +5105,15 @@ describe('films.json', () => {
     }
   })
 
-  it('reports how many answers lack a composer, without failing on it', () => {
-    const missing = answers.filter((f) => f.musicDirector === null).length
-    // Measured at ~22% on 2026-09-13. A sharp rise means the import broke.
-    expect(missing / answers.length).toBeLessThan(0.4)
+  it('gives every answer a music director', () => {
+    for (const f of answers) expect(f.musicDirector).not.toBeNull()
+  })
+
+  it('has a composer for most guessable films too', () => {
+    // Measured at 77% on 2026-09-13. A sharp drop means the composer job
+    // list in scripts/tmdb.ts stopped matching TMDB's spellings.
+    const withComposer = films.filter((f) => f.musicDirector !== null).length
+    expect(withComposer / films.length).toBeGreaterThan(0.6)
   })
 
   it('has no duplicate people within one film’s cast', () => {
