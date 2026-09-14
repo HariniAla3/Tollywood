@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeTitle, searchFilms } from './search'
+import { normalizeTitle, searchFilms, searchKey } from './search'
 import type { Film, Person } from './types'
 
 const p = (id: number): Person => ({ id, name: `P${id}` })
@@ -84,5 +84,37 @@ describe('searchFilms', () => {
 
   it('returns an empty list when nothing matches', () => {
     expect(searchFilms(catalogue, 'zzzzz')).toEqual([])
+  })
+})
+
+describe('searchKey — Telugu transliteration', () => {
+  it('collapses repeated vowels', () => {
+    expect(searchKey('Baahubali')).toBe(searchKey('Bāhubali'))
+    expect(searchKey('Aarya 2')).toBe(searchKey('Arya 2'))
+    expect(searchKey('Dookudu')).toBe(searchKey('Dokudu'))
+  })
+
+  it('leaves single vowels alone', () => {
+    expect(searchKey('Pokiri')).toBe('pokiri')
+  })
+})
+
+describe('searchFilms — transliteration tolerance', () => {
+  const alt = [
+    film('f_10', 'Bāhubali: The Beginning'),
+    film('f_11', 'Aarya 2'),
+    film('f_12', 'Dookudu'),
+  ]
+
+  it('finds Bāhubali when the player types Baahubali', () => {
+    expect(searchFilms(alt, 'baahubali').map((f) => f.id)).toContain('f_10')
+  })
+
+  it('finds Aarya 2 when the player types Arya 2', () => {
+    expect(searchFilms(alt, 'arya 2').map((f) => f.id)).toContain('f_11')
+  })
+
+  it('finds Dookudu when the player types Dokudu', () => {
+    expect(searchFilms(alt, 'dokudu').map((f) => f.id)).toContain('f_12')
   })
 })

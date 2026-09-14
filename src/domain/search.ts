@@ -9,11 +9,22 @@ export function normalizeTitle(s: string): string {
     .trim()
 }
 
+/**
+ * Telugu titles are transliterated inconsistently, and TMDB's spelling often
+ * is not the one people type: "Bāhubali" normalises to "bahubali" while
+ * everyone types "baahubali"; TMDB has "Aarya 2" for the film usually written
+ * "Arya 2"; "Dookudu" is also written "Dokudu". Collapsing runs of the same
+ * vowel makes all of those agree, on both sides of the comparison.
+ */
+export function searchKey(s: string): string {
+  return normalizeTitle(s).replace(/([aeiou])\1+/g, '$1')
+}
+
 /** Lower is better. Infinity means no match. */
 function score(film: Film, query: string): number {
   const haystacks = [film.title, film.titleTelugu ?? '', ...film.aliases]
     .filter(Boolean)
-    .map(normalizeTitle)
+    .map(searchKey)
 
   let best = Infinity
   for (const h of haystacks) {
@@ -26,7 +37,7 @@ function score(film: Film, query: string): number {
 }
 
 export function searchFilms(films: Film[], query: string, limit = 8): Film[] {
-  const q = normalizeTitle(query)
+  const q = searchKey(query)
   if (q === '') return []
 
   return films
