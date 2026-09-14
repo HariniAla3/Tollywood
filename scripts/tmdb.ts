@@ -96,6 +96,11 @@ function crewMember(credits: TmdbCredits, job: string): Person | null {
   return found ? { id: found.id, name: found.name } : null
 }
 
+function dedupeById(people: Person[]): Person[] {
+  const seen = new Set<number>()
+  return people.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)))
+}
+
 function composer(credits: TmdbCredits): Person | null {
   for (const job of COMPOSER_JOBS) {
     const found = crewMember(credits, job)
@@ -123,10 +128,15 @@ export function toCandidate(
       .filter((n): n is string => n !== undefined),
     director: crewMember(credits, 'Director'),
     musicDirector: composer(credits),
-    cast: [...credits.cast]
-      .sort((a, b) => a.order - b.order)
-      .slice(0, CAST_DEPTH)
-      .map((c) => ({ id: c.id, name: c.name })),
+    // TMDB credits an actor once per role, and dual roles are common in Telugu
+    // cinema -- so the same person can appear twice. Left in, they would hold
+    // two board cells and both would open on a single guess. Keep the
+    // best-billed credit for each person.
+    cast: dedupeById(
+      [...credits.cast]
+        .sort((a, b) => a.order - b.order)
+        .map((c) => ({ id: c.id, name: c.name })),
+    ).slice(0, CAST_DEPTH),
     posterPath: movie.poster_path,
     popularity: movie.popularity,
     voteCount: movie.vote_count,

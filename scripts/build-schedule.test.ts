@@ -69,3 +69,18 @@ describe('buildSchedule', () => {
     ).toThrow(/empty/i)
   })
 })
+
+describe('buildSchedule — cycle boundaries', () => {
+  it('does not repeat a film within the no-repeat window', () => {
+    const pool = Array.from({ length: 120 }, (_, i) => `f_${i}`)
+    const s = buildSchedule({
+      answerIds: pool, existing: {}, today: '2026-01-01',
+      from: '2026-01-01', days: 400, seed: 7,
+    })
+    const ids = Object.keys(s).sort().map((d) => s[d])
+    for (let i = 0; i < ids.length; i++) {
+      const w = ids.slice(i, i + 90)
+      expect(new Set(w).size).toBe(w.length)
+    }
+  })
+})

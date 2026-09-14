@@ -4,6 +4,9 @@ import type { Film } from '../src/domain/types'
 
 export type Schedule = Record<string, string>
 
+/** No film may recur inside this many days. */
+export const NO_REPEAT_WINDOW = 90
+
 export type ScheduleOptions = {
   answerIds: string[]
   existing: Schedule
@@ -38,14 +41,30 @@ export function buildSchedule(opts: ScheduleOptions): Schedule {
   const rng = makeRng(seed)
   let pool = shuffled(answerIds, rng).filter((id) => !frozen.has(id))
   let cursor = 0
+  const assigned: string[] = []
 
   for (const date of dates) {
     if (out[date]) continue
     if (cursor >= pool.length) {
-      pool = shuffled(answerIds, rng)
+      // A plain reshuffle can put a film straight back into play across the
+      // cycle boundary. Films used recently go last in the new cycle, ordered
+      // oldest-first -- so the most recently seen film is also the furthest
+      // away next time. Every repeat gap then equals the pool size, which
+      // satisfies NO_REPEAT_WINDOW for any pool at least that large.
+      const window = assigned.slice(-NO_REPEAT_WINDOW)
+      const lastUsed = new Map(window.map((id, i) => [id, i]))
+      const fresh = shuffled(answerIds, rng)
+      pool = [
+        ...fresh.filter((id) => !lastUsed.has(id)),
+        ...fresh
+          .filter((id) => lastUsed.has(id))
+          .sort((a, b) => lastUsed.get(a)! - lastUsed.get(b)!),
+      ]
       cursor = 0
     }
-    out[date] = pool[cursor++]
+    const id = pool[cursor++]
+    out[date] = id
+    assigned.push(id)
   }
 
   return out
