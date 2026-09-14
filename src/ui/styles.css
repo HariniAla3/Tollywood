@@ -159,3 +159,48 @@ body {
 .clues__item--locked .clues__num { background: var(--border); color: var(--muted); }
 .clues__text { font-size: 14px; line-height: 1.45; }
 .clues__hint { color: var(--muted); font-size: 13px; margin: 6px 2px 0; }
+
+.riddle { margin: 16px 0; }
+.riddle__text {
+  margin: 0; padding: 14px 16px;
+  background: var(--surface); border: 1px solid var(--accent); border-radius: 8px;
+  font-size: 15px; line-height: 1.5;
+}
+.riddle__locked {
+  margin: 0; padding: 14px 16px;
+  background: var(--surface); border: 1px dashed var(--border); border-radius: 8px;
+  color: var(--muted); font-size: 14px;
+}
+
+.modal__panel--wide { max-width: 460px; max-height: 86vh; overflow-y: auto; }
+.howto__title { margin: 0 0 4px; font-size: 22px; }
+.howto__lede { margin: 0 0 12px; font-size: 16px; }
+.howto__p { margin: 0 0 12px; font-size: 14px; line-height: 1.55; color: var(--text); }
+.howto__h3 {
+  margin: 20px 0 8px; font-size: 11px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted);
+}
+.howto__demo {
+  padding: 12px; margin-bottom: 14px;
+  background: var(--bg); border-radius: 8px;
+}
+.howto__row { display: flex; align-items: stretch; gap: 6px; margin-bottom: 6px; }
+.howto__label {
+  flex: 0 0 44px; align-self: center;
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+}
+.howto__cell { min-height: 40px; padding: 6px 8px; }
+.howto__cell .cell__value { font-size: 12px; }
+.howto__list { margin: 0 0 12px; padding-left: 18px; font-size: 14px; line-height: 1.55; }
+.howto__list li { margin-bottom: 8px; }
+.howto__foot { margin: 16px 0 16px; font-size: 14px; color: var(--muted); }
+.howto__go { width: 100%; }
+
+.header__help {
+  width: 22px; height: 22px; padding: 0; cursor: pointer;
+  display: grid; place-items: center;
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 50%;
+  font: inherit; font-size: 13px; font-weight: 700;
+}
+.header__help:hover { color: var(--text); border-color: var(--muted); }

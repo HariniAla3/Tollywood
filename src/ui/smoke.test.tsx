@@ -9,6 +9,7 @@ import { istDateString } from '../domain/puzzleDate'
 describe('App against real data', () => {
   beforeEach(() => {
     localStorage.clear()
+    localStorage.setItem('tollywood:seen-how-to-play', '1')
     window.history.replaceState({}, '', '/')
   })
   afterEach(() => vi.useRealTimers())
@@ -43,15 +44,21 @@ describe('App against real data', () => {
     await userEvent.click(screen.getAllByRole('option')[0])
     // Either it was the answer (modal) or a clue unlocked.
     const dialog = screen.queryByRole('dialog')
-    const locked = screen.queryAllByText(/Unlocks after guess/).length
-    expect(dialog !== null || locked === 4).toBe(true)
+    const countdown = screen.queryByText(/Unlocks after 1 more guess/i)
+    expect(dialog !== null || countdown !== null).toBe(true)
     expect(answer.cast.length).toBeGreaterThanOrEqual(6)
   })
 
-  it('generates real clues that never name the real answer', () => {
+  it('generates a real riddle that never names the real answer', async () => {
     const today = istDateString(new Date())
     const answer = getFilm(answerIdForDate(today)!)!
     render(<App />)
-    expect(screen.getByLabelText('Clues').textContent).not.toContain(answer.title)
+    // Unlock it: the riddle only renders after two guesses.
+    for (const title of ['rangasthalam', 'pokiri']) {
+      await userEvent.type(screen.getByRole('combobox'), title)
+      const opts = screen.queryAllByRole('option')
+      if (opts.length) await userEvent.click(opts[0])
+    }
+    expect(screen.getByLabelText('Riddle').textContent).not.toContain(answer.title)
   })
 })

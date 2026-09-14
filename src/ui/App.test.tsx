@@ -26,6 +26,8 @@ vi.mock('../data/repository', () => ({
 describe('App', () => {
   beforeEach(() => {
     localStorage.clear()
+    // Most tests exercise the game, not the first-visit intro.
+    localStorage.setItem('tollywood:seen-how-to-play', '1')
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date('2026-09-13T06:00:00Z'))
     window.history.replaceState({}, '', '/')
@@ -50,26 +52,48 @@ describe('App', () => {
     expect(screen.getByText('Pokiri')).toBeInTheDocument()
   })
 
-  it('keeps every clue locked before the first guess', () => {
+  it('keeps the riddle locked before two guesses', () => {
     render(<App />)
-    expect(screen.getAllByText(/Unlocks after guess/)).toHaveLength(5)
+    expect(screen.getByText(/Unlocks after 2 more guesses/i)).toBeInTheDocument()
   })
 
-  it('unlocks one clue after a wrong guess', async () => {
+  it('counts down the riddle after one guess', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     render(<App />)
     await user.type(screen.getByRole('combobox'), 'pokiri')
     await user.click(screen.getByRole('option'))
-    expect(screen.getAllByText(/Unlocks after guess/)).toHaveLength(4)
+    expect(screen.getByText(/Unlocks after 1 more guess\./i)).toBeInTheDocument()
   })
 
-  it('never shows a clue naming the answer', async () => {
+  it('never shows a riddle naming the answer', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     render(<App />)
     await user.type(screen.getByRole('combobox'), 'pokiri')
     await user.click(screen.getByRole('option'))
-    const panel = screen.getByLabelText('Clues')
-    expect(panel.textContent).not.toContain('Rangasthalam')
+    expect(screen.getByLabelText('Riddle').textContent).not.toContain('Rangasthalam')
+  })
+
+  it('shows how to play on a first visit', () => {
+    localStorage.clear()
+    render(<App />)
+    expect(screen.getByRole('dialog', { name: /how to play/i })).toBeInTheDocument()
+  })
+
+  it('does not show how to play again once dismissed', async () => {
+    localStorage.clear()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const { unmount } = render(<App />)
+    await user.click(screen.getByRole('button', { name: /let.s play/i }))
+    unmount()
+    render(<App />)
+    expect(screen.queryByRole('dialog', { name: /how to play/i })).not.toBeInTheDocument()
+  })
+
+  it('reopens how to play from the ? button', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /how to play/i }))
+    expect(screen.getByRole('dialog', { name: /how to play/i })).toBeInTheDocument()
   })
 
   it('shows the result modal on a win', async () => {

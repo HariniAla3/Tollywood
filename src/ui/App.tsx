@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { getFilm, guessableFilms, playableDates } from '../data/repository'
-import { buildClues } from '../domain/clues'
+import { buildRiddle } from '../domain/clues'
+import riddles from '../data/riddles.json'
 import type { CellRef } from '../domain/board'
 import { istDateString, puzzleNumber } from '../domain/puzzleDate'
 import { ArchiveList } from './ArchiveList'
@@ -10,8 +11,10 @@ import { GuessHistory } from './GuessHistory'
 import { GuessInput } from './GuessInput'
 import { LifelineBar } from './LifelineBar'
 import { ResultModal } from './ResultModal'
-import { CluePanel } from './CluePanel'
+import { RiddlePanel } from './RiddlePanel'
+import { HowToPlay } from './HowToPlay'
 import { useGame } from './useGame'
+import { hasSeenHowToPlay, markHowToPlaySeen } from '../storage/prefs'
 
 function dateFromUrl(fallback: string): string {
   const d = new URLSearchParams(window.location.search).get('d')
@@ -24,6 +27,13 @@ export function App() {
   const [showArchive, setShowArchive] = useState(false)
   const [selecting, setSelecting] = useState(false)
   const [dismissed, setDismissed] = useState(false)
+  // Shown automatically on a first visit only; the ? button reopens it.
+  const [showHowTo, setShowHowTo] = useState(() => !hasSeenHowToPlay())
+
+  const closeHowTo = useCallback(() => {
+    markHowToPlaySeen()
+    setShowHowTo(false)
+  }, [])
 
   const game = useGame(puzzleDate, today)
   const films = useMemo(() => guessableFilms(), [])
@@ -64,7 +74,7 @@ export function App() {
 
   const { session } = game
   const over = session.status !== 'playing'
-  const clues = buildClues(session.answer, films)
+  const riddle = buildRiddle(session.answer, films, riddles as Record<string, string>)
 
   return (
     <div className="app">
@@ -73,6 +83,14 @@ export function App() {
         <span className="header__num">#{puzzleNumber(puzzleDate)}</span>
         <button type="button" className="header__link" onClick={() => setShowArchive((v) => !v)}>
           Past days
+        </button>
+        <button
+          type="button"
+          className="header__help"
+          onClick={() => setShowHowTo(true)}
+          aria-label="How to play"
+        >
+          ?
         </button>
       </header>
 
@@ -96,7 +114,7 @@ export function App() {
         }}
       />
 
-      <CluePanel clues={clues} unlocked={session.outcomes.length} />
+      <RiddlePanel riddle={riddle} guesses={session.outcomes.length} />
 
       <GuessInput
         films={films}
@@ -107,9 +125,11 @@ export function App() {
 
       <GuessHistory outcomes={session.outcomes} lookup={getFilm} />
 
-      {!dismissed && (
+      {!dismissed && !showHowTo && (
         <ResultModal session={session} stats={game.stats} onClose={() => setDismissed(true)} />
       )}
+
+      {showHowTo && <HowToPlay onClose={closeHowTo} />}
 
       <Footer />
     </div>

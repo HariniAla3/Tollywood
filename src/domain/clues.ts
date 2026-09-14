@@ -6,8 +6,8 @@ import { makeRng } from './rng'
 import { normalizeTitle } from './search'
 import type { Film } from './types'
 
-/** One clue per wrong guess, up to this many. */
-export const CLUE_COUNT = 5
+/** The riddle unlocks once the player has used this many guesses. */
+export const RIDDLE_UNLOCK_AT = 2
 
 /** Rank cutoffs (by vote count within the catalogue) for the fame clue. */
 const HUGELY_KNOWN = 25
@@ -105,13 +105,28 @@ function linkClue(
 }
 
 /**
- * Five clues, vague to sharp, unlocked one per wrong guess.
+ * The riddle shown for a film.
  *
- * No clue ever references the mystery film itself -- every linked title is
+ * A hand-written riddle in src/data/riddles.json always wins. Anything not
+ * written yet falls back to a generated hint, so the game always has
+ * something to show and riddles can be filled in a few at a time without
+ * ever leaving a puzzle hintless.
+ *
+ * No riddle ever references the mystery film itself -- every linked title is
  * a different film by construction, and a test asserts it across the whole
  * answer pool.
  */
-export function buildClues(answer: Film, catalogue: Film[]): string[] {
+export function buildRiddle(
+  answer: Film,
+  catalogue: Film[],
+  written: Record<string, string> = {},
+): string {
+  const handWritten = written[answer.id]?.trim()
+  if (handWritten) return handWritten
+  return generatedFallback(answer, catalogue)
+}
+
+function generatedFallback(answer: Film, catalogue: Film[]): string {
   const lead = answer.cast[0]
 
   const firstLetter = () =>
@@ -163,11 +178,14 @@ export function buildClues(answer: Film, catalogue: Film[]): string[] {
   // A film with no co-credits at all would print the same fallback twice.
   if (rung5 === rung4) rung5 = letterCount()
 
-  return [
-    pick(era(answer.year), answer.id, 1),
-    pick(titleShape(answer.title), answer.id, 2),
-    pick(fame(answer, catalogue), answer.id, 3),
-    rung4,
-    rung5,
-  ]
+  // Prefer a line that actually points at another film. Either rung can end
+  // up as a bare first-letter fallback, so pick whichever is a real link
+  // rather than assuming the later rung is the better one.
+  const isWeak = (line: string) => /first letter|tho start|letters unnay/i.test(line)
+  const pointing = !isWeak(rung5) ? rung5 : !isWeak(rung4) ? rung4 : rung5
+  const isFallbackLine = isWeak(pointing)
+
+  return isFallbackLine
+    ? `${pick(era(answer.year), answer.id, 1)} ${pick(titleShape(answer.title), answer.id, 2)} ${pick(fame(answer, catalogue), answer.id, 3)}`
+    : `${pick(era(answer.year), answer.id, 1)} ${pointing}`
 }
