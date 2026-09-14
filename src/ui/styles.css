@@ -47,3 +47,25 @@ body {
   .board__cells:not(.board__cells--grid) { flex-direction: column; }
   .board__cells--grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+.guess { position: relative; margin: 16px 0; }
+.guess__input {
+  width: 100%; padding: 12px 14px; font: inherit;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.guess__input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.guess__input:disabled { opacity: .5; }
+.guess__empty { color: var(--muted); font-size: 14px; margin: 8px 2px; }
+.guess__options {
+  list-style: none; margin: 4px 0 0; padding: 4px; position: absolute;
+  left: 0; right: 0; z-index: 5; max-height: 260px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+}
+.guess__option {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; border-radius: 6px; cursor: pointer;
+}
+.guess__option--active { background: #2a2622; }
+.guess__option--used { opacity: .4; cursor: not-allowed; text-decoration: line-through; }
+.guess__year { color: var(--muted); font-variant-numeric: tabular-nums; }
