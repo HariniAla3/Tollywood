@@ -69,3 +69,54 @@ body {
 .guess__option--active { background: #2a2622; }
 .guess__option--used { opacity: .4; cursor: not-allowed; text-decoration: line-through; }
 .guess__year { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.history { list-style: none; margin: 16px 0; padding: 0; }
+.history__item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; margin-bottom: 6px;
+}
+.history__item--win { border-color: var(--matched); }
+.history__title { font-weight: 600; }
+.history__year { color: var(--muted); font-variant-numeric: tabular-nums; }
+.history__count { margin-left: auto; color: var(--muted); font-size: 13px; }
+
+.ruledout { margin: 16px 0; }
+.ruledout__count { color: var(--accent); }
+.ruledout__list { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; }
+.ruledout__name {
+  padding: 4px 10px; font-size: 13px; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 999px; text-decoration: line-through;
+}
+
+.lifelines { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.lifelines__btn {
+  padding: 10px 16px; font: inherit; font-weight: 600; cursor: pointer;
+  background: transparent; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 8px;
+}
+.lifelines__btn:hover { background: rgba(224, 83, 47, .12); }
+
+.modal {
+  position: fixed; inset: 0; display: grid; place-items: center;
+  background: rgba(0, 0, 0, .7); padding: 16px; z-index: 20;
+}
+.modal__panel {
+  position: relative; width: 100%; max-width: 380px; padding: 24px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+}
+.modal__close {
+  position: absolute; top: 8px; right: 10px; background: none; border: none;
+  color: var(--muted); font-size: 24px; cursor: pointer;
+}
+.modal__verdict { margin: 0; color: var(--muted); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
+.modal__title { margin: 4px 0 2px; font-size: 24px; }
+.modal__sub { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+.modal__stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 16px; }
+.modal__stats div { text-align: center; }
+.modal__stats dt { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+.modal__stats dd { margin: 2px 0 0; font-size: 20px; font-weight: 700; }
+.modal__card {
+  margin: 0 0 16px; padding: 12px; font-size: 15px; line-height: 1.35;
+  background: var(--bg); border-radius: 8px; white-space: pre-wrap;
+}
