@@ -141,3 +141,21 @@ body {
 .archive__date { color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .footer { margin: 32px 0 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+.clues { margin: 16px 0; }
+.clues__list { list-style: none; margin: 0; padding: 0; counter-reset: clue; }
+.clues__item {
+  display: flex; gap: 10px; align-items: baseline;
+  padding: 9px 12px; margin-bottom: 6px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+}
+.clues__item--locked { opacity: .45; border-style: dashed; }
+.clues__num {
+  flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 700;
+  background: var(--accent); color: #fff;
+}
+.clues__item--locked .clues__num { background: var(--border); color: var(--muted); }
+.clues__text { font-size: 14px; line-height: 1.45; }
+.clues__hint { color: var(--muted); font-size: 13px; margin: 6px 2px 0; }

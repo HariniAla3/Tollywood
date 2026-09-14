@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { GuessHistory } from './GuessHistory'
-import { RuledOutPanel } from './RuledOutPanel'
 import { LifelineBar } from './LifelineBar'
 import { ResultModal } from './ResultModal'
 import { startSession, submitGuess } from '../domain/session'
@@ -47,24 +46,6 @@ describe('GuessHistory', () => {
     const s = submitGuess(startSession('d', answer), wrong)
     render(<GuessHistory outcomes={s.outcomes} lookup={lookup} />)
     expect(screen.getByText(/0 revealed/i)).toBeInTheDocument()
-  })
-})
-
-describe('RuledOutPanel', () => {
-  it('renders nothing when nobody is ruled out', () => {
-    const { container } = render(<RuledOutPanel people={[]} />)
-    expect(container).toBeEmptyDOMElement()
-  })
-
-  it('lists ruled-out names', () => {
-    render(<RuledOutPanel people={[p(1, 'Mahesh Babu'), p(2, 'Puri Jagannadh')]} />)
-    expect(screen.getByText('Mahesh Babu')).toBeInTheDocument()
-    expect(screen.getByText('Puri Jagannadh')).toBeInTheDocument()
-  })
-
-  it('shows how many are ruled out', () => {
-    render(<RuledOutPanel people={[p(1), p(2), p(3)]} />)
-    expect(screen.getByText('3')).toBeInTheDocument()
   })
 })
 

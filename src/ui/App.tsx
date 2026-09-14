@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { getFilm, guessableFilms, playableDates } from '../data/repository'
+import { buildClues } from '../domain/clues'
 import type { CellRef } from '../domain/board'
 import { istDateString, puzzleNumber } from '../domain/puzzleDate'
 import { ArchiveList } from './ArchiveList'
@@ -9,7 +10,7 @@ import { GuessHistory } from './GuessHistory'
 import { GuessInput } from './GuessInput'
 import { LifelineBar } from './LifelineBar'
 import { ResultModal } from './ResultModal'
-import { RuledOutPanel } from './RuledOutPanel'
+import { CluePanel } from './CluePanel'
 import { useGame } from './useGame'
 
 function dateFromUrl(fallback: string): string {
@@ -63,6 +64,7 @@ export function App() {
 
   const { session } = game
   const over = session.status !== 'playing'
+  const clues = buildClues(session.answer, films)
 
   return (
     <div className="app">
@@ -94,6 +96,8 @@ export function App() {
         }}
       />
 
+      <CluePanel clues={clues} unlocked={session.outcomes.length} />
+
       <GuessInput
         films={films}
         guessedIds={session.outcomes.map((o) => o.guessId)}
@@ -102,7 +106,6 @@ export function App() {
       />
 
       <GuessHistory outcomes={session.outcomes} lookup={getFilm} />
-      <RuledOutPanel people={session.ruledOut} />
 
       {!dismissed && (
         <ResultModal session={session} stats={game.stats} onClose={() => setDismissed(true)} />

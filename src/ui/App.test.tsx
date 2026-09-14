@@ -50,12 +50,26 @@ describe('App', () => {
     expect(screen.getByText('Pokiri')).toBeInTheDocument()
   })
 
-  it('rules out people from a wrong guess', async () => {
+  it('keeps every clue locked before the first guess', () => {
+    render(<App />)
+    expect(screen.getAllByText(/Unlocks after guess/)).toHaveLength(5)
+  })
+
+  it('unlocks one clue after a wrong guess', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     render(<App />)
     await user.type(screen.getByRole('combobox'), 'pokiri')
     await user.click(screen.getByRole('option'))
-    expect(screen.getByText('Mahesh Babu')).toBeInTheDocument()
+    expect(screen.getAllByText(/Unlocks after guess/)).toHaveLength(4)
+  })
+
+  it('never shows a clue naming the answer', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<App />)
+    await user.type(screen.getByRole('combobox'), 'pokiri')
+    await user.click(screen.getByRole('option'))
+    const panel = screen.getByLabelText('Clues')
+    expect(panel.textContent).not.toContain('Rangasthalam')
   })
 
   it('shows the result modal on a win', async () => {

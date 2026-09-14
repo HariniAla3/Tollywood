@@ -35,17 +35,23 @@ describe('App against real data', () => {
     expect(options[0].textContent).toMatch(/hubali/i)
   })
 
-  it('plays a real guess and reveals real people', async () => {
+  it('plays a real guess and advances the game', async () => {
     const today = istDateString(new Date())
     const answer = getFilm(answerIdForDate(today)!)!
     render(<App />)
     await userEvent.type(screen.getByRole('combobox'), 'rangasthalam')
-    const opt = screen.getAllByRole('option')[0]
-    await userEvent.click(opt)
-    // Either it was the answer (modal) or it ruled people out.
-    const ruledOut = screen.queryByText(/Ruled out/i)
+    await userEvent.click(screen.getAllByRole('option')[0])
+    // Either it was the answer (modal) or a clue unlocked.
     const dialog = screen.queryByRole('dialog')
-    expect(ruledOut || dialog).toBeTruthy()
+    const locked = screen.queryAllByText(/Unlocks after guess/).length
+    expect(dialog !== null || locked === 4).toBe(true)
     expect(answer.cast.length).toBeGreaterThanOrEqual(6)
+  })
+
+  it('generates real clues that never name the real answer', () => {
+    const today = istDateString(new Date())
+    const answer = getFilm(answerIdForDate(today)!)!
+    render(<App />)
+    expect(screen.getByLabelText('Clues').textContent).not.toContain(answer.title)
   })
 })
