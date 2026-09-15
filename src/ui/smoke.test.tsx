@@ -44,7 +44,7 @@ describe('App against real data', () => {
     await userEvent.click(screen.getAllByRole('option')[0])
     // Either it was the answer (modal) or a clue unlocked.
     const dialog = screen.queryByRole('dialog')
-    const countdown = screen.queryByText(/Unlocks after 1 more guess/i)
+    const countdown = screen.queryByText(/Unlocks after 5 more guesses/i)
     expect(dialog !== null || countdown !== null).toBe(true)
     expect(answer.cast.length).toBeGreaterThanOrEqual(6)
   })
@@ -53,8 +53,8 @@ describe('App against real data', () => {
     const today = istDateString(new Date())
     const answer = getFilm(answerIdForDate(today)!)!
     render(<App />)
-    // Unlock it: the riddle only renders after two guesses.
-    for (const title of ['rangasthalam', 'pokiri']) {
+    // Unlock it: the riddle only renders after six guesses.
+    for (const title of ['rangasthalam', 'pokiri', 'eega', 'athadu', 'jersey', 'magadheera']) {
       await userEvent.type(screen.getByRole('combobox'), title)
       const opts = screen.queryAllByRole('option')
       if (opts.length) await userEvent.click(opts[0])

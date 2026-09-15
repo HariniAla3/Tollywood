@@ -52,9 +52,9 @@ describe('App', () => {
     expect(screen.getByText('Pokiri')).toBeInTheDocument()
   })
 
-  it('keeps the riddle locked before two guesses', () => {
+  it('keeps the riddle locked before six guesses', () => {
     render(<App />)
-    expect(screen.getByText(/Unlocks after 2 more guesses/i)).toBeInTheDocument()
+    expect(screen.getByText(/Unlocks after 6 more guesses/i)).toBeInTheDocument()
   })
 
   it('counts down the riddle after one guess', async () => {
@@ -62,7 +62,7 @@ describe('App', () => {
     render(<App />)
     await user.type(screen.getByRole('combobox'), 'pokiri')
     await user.click(screen.getByRole('option'))
-    expect(screen.getByText(/Unlocks after 1 more guess\./i)).toBeInTheDocument()
+    expect(screen.getByText(/Unlocks after 5 more guesses/i)).toBeInTheDocument()
   })
 
   it('never shows a riddle naming the answer', async () => {

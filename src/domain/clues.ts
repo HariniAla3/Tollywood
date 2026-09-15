@@ -6,8 +6,12 @@ import { makeRng } from './rng'
 import { normalizeTitle } from './search'
 import type { Film } from './types'
 
-/** The riddle unlocks once the player has used this many guesses. */
-export const RIDDLE_UNLOCK_AT = 2
+/**
+ * The riddle unlocks once the player has used this many guesses. Set late
+ * deliberately: the hand-written riddles describe the plot closely enough
+ * that an early reveal would end most puzzles on the spot.
+ */
+export const RIDDLE_UNLOCK_AT = 6
 
 /** Rank cutoffs (by vote count within the catalogue) for the fame clue. */
 const HUGELY_KNOWN = 25

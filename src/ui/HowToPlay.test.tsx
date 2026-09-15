@@ -39,7 +39,7 @@ describe('HowToPlay', () => {
 
   it('says when the riddle unlocks', () => {
     render(<HowToPlay onClose={() => {}} />)
-    expect(screen.getByText(/unlocks after your second guess/i)).toBeInTheDocument()
+    expect(screen.getByText(/unlocks after your sixth guess/i)).toBeInTheDocument()
   })
 
   it('mentions the daily reset and the archive', () => {

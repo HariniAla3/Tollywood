@@ -78,7 +78,7 @@ export function HowToPlay({ onClose }: Props) {
         <h3 className="howto__h3">Help along the way</h3>
         <ul className="howto__list">
           <li>
-            A <strong>riddle</strong> unlocks after your second guess.
+            Stuck? A <strong>riddle</strong> about the film unlocks after your sixth guess.
           </li>
           <li>
             After guess <strong>4</strong> and guess <strong>6</strong>, you can reveal any one

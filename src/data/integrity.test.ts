@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import filmsJson from './films.json'
 import scheduleJson from './schedule.json'
+import riddlesJson from './riddles.json'
 import { isMysteryEligible } from '../domain/gates'
 import { FIRST_YEAR, LAST_YEAR, type Film } from '../domain/types'
 import { MIN_GUESSABLE, MIN_MYSTERY, VOTE_FLOOR } from '../../scripts/coverage'
@@ -97,5 +98,41 @@ describe('schedule.json', () => {
       const window = ids.slice(i, i + 90)
       expect(new Set(window).size).toBe(window.length)
     }
+  })
+})
+
+describe('riddles.json', () => {
+  const riddles = riddlesJson as Record<string, string>
+
+  it('keys every riddle to a film that exists', () => {
+    for (const id of Object.keys(riddles)) expect(byId.has(id)).toBe(true)
+  })
+
+  it('only writes riddles for answer-eligible films', () => {
+    for (const id of Object.keys(riddles)) {
+      expect(byId.get(id)?.isMysteryEligible).toBe(true)
+    }
+  })
+
+  it('has no empty riddles', () => {
+    for (const [id, r] of Object.entries(riddles)) {
+      expect(r.trim().length, `riddle for ${id} is blank`).toBeGreaterThan(20)
+    }
+  })
+
+  // The whole point of a riddle is that it does not hand over the answer.
+  it('never names its own film', () => {
+    for (const [id, r] of Object.entries(riddles)) {
+      const film = byId.get(id)!
+      expect(
+        r.toLowerCase().includes(film.title.toLowerCase()),
+        `riddle for "${film.title}" contains its own title`,
+      ).toBe(false)
+    }
+  })
+
+  it('never reuses the same riddle for two films', () => {
+    const values = Object.values(riddles)
+    expect(new Set(values).size).toBe(values.length)
   })
 })
