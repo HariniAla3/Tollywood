@@ -10,10 +10,14 @@ export function emptyLifelines(): LifelineState {
   return { revealsUsed: 0, extraGuessesUnlocked: false }
 }
 
-/** One reveal is earned after the 4th guess, a second after the 6th. */
+/** Guess counts at which a cell reveal becomes available. */
+export const FIRST_REVEAL_AT = 3
+export const SECOND_REVEAL_AT = 4
+
+/** One reveal is earned after the 3rd guess, a second after the 4th. */
 export function revealsEarned(guessCount: number): number {
-  if (guessCount >= 6) return 2
-  if (guessCount >= 4) return 1
+  if (guessCount >= SECOND_REVEAL_AT) return 2
+  if (guessCount >= FIRST_REVEAL_AT) return 1
   return 0
 }
 

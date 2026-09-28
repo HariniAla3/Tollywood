@@ -98,23 +98,23 @@ describe('useReveal', () => {
 
   it('opens a chosen cell once earned', () => {
     let s = startSession('d', answer)
-    for (let i = 1; i <= 4; i++) s = submitGuess(s, miss(i))
+    for (let i = 1; i <= 3; i++) s = submitGuess(s, miss(i))
     s = useReveal(s, { kind: 'crew', role: 'director' })
     expect(s.board.director.state).toBe('lifeline')
     expect(s.lifelines.revealsUsed).toBe(1)
   })
 
-  it('refuses a second reveal until the sixth guess', () => {
+  it('refuses a second reveal until the fourth guess', () => {
     let s = startSession('d', answer)
-    for (let i = 1; i <= 4; i++) s = submitGuess(s, miss(i))
+    for (let i = 1; i <= 3; i++) s = submitGuess(s, miss(i))
     s = useReveal(s, { kind: 'crew', role: 'director' })
     s = useReveal(s, { kind: 'crew', role: 'musicDirector' })
     expect(s.board.musicDirector!.state).toBe('hidden')
   })
 
-  it('allows a second reveal after the sixth guess', () => {
+  it('allows a second reveal after the fourth guess', () => {
     let s = startSession('d', answer)
-    for (let i = 1; i <= 6; i++) s = submitGuess(s, miss(i))
+    for (let i = 1; i <= 4; i++) s = submitGuess(s, miss(i))
     s = useReveal(s, { kind: 'crew', role: 'director' })
     s = useReveal(s, { kind: 'crew', role: 'musicDirector' })
     expect(s.board.musicDirector!.state).toBe('lifeline')

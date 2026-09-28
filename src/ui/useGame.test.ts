@@ -72,9 +72,9 @@ describe('useGame', () => {
     expect(result.current.revealsAvailable).toBe(0)
   })
 
-  it('exposes a reveal after the fourth guess', () => {
+  it('exposes a reveal after the third guess', () => {
     const { result } = renderHook(() => useGame('2026-09-13', '2026-09-13'))
-    const misses = [1, 2, 3, 4].map((n) => ({ ...wrong, id: `f_m${n}` }))
+    const misses = [1, 2, 3].map((n) => ({ ...wrong, id: `f_m${n}` }))
     act(() => misses.forEach((m) => result.current.guess(m)))
     expect(result.current.revealsAvailable).toBe(1)
   })

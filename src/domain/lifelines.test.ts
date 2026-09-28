@@ -9,41 +9,40 @@ const state = (over: Partial<LifelineState> = {}): LifelineState => ({
 })
 
 describe('revealsEarned', () => {
-  it('earns none before the fourth guess', () => {
+  it('earns none before the third guess', () => {
     expect(revealsEarned(0)).toBe(0)
-    expect(revealsEarned(3)).toBe(0)
+    expect(revealsEarned(2)).toBe(0)
   })
 
-  it('earns one after the fourth guess', () => {
-    expect(revealsEarned(4)).toBe(1)
-    expect(revealsEarned(5)).toBe(1)
+  it('earns one after the third guess', () => {
+    expect(revealsEarned(3)).toBe(1)
   })
 
-  it('earns two after the sixth guess', () => {
-    expect(revealsEarned(6)).toBe(2)
+  it('earns two after the fourth guess', () => {
+    expect(revealsEarned(4)).toBe(2)
     expect(revealsEarned(10)).toBe(2)
   })
 })
 
 describe('revealsAvailable', () => {
   it('is zero when none are earned', () => {
-    expect(revealsAvailable(state(), 3)).toBe(0)
+    expect(revealsAvailable(state(), 2)).toBe(0)
   })
 
   it('is one when earned and unused', () => {
-    expect(revealsAvailable(state(), 4)).toBe(1)
+    expect(revealsAvailable(state(), 3)).toBe(1)
   })
 
   it('drops to zero once spent', () => {
-    expect(revealsAvailable(state({ revealsUsed: 1 }), 4)).toBe(0)
+    expect(revealsAvailable(state({ revealsUsed: 1 }), 3)).toBe(0)
   })
 
-  it('rises again at the sixth guess', () => {
-    expect(revealsAvailable(state({ revealsUsed: 1 }), 6)).toBe(1)
+  it('rises again at the fourth guess', () => {
+    expect(revealsAvailable(state({ revealsUsed: 1 }), 4)).toBe(1)
   })
 
   it('never goes negative', () => {
-    expect(revealsAvailable(state({ revealsUsed: 2 }), 4)).toBe(0)
+    expect(revealsAvailable(state({ revealsUsed: 2 }), 3)).toBe(0)
   })
 })
 

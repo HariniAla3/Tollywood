@@ -81,7 +81,7 @@ export function HowToPlay({ onClose }: Props) {
             Stuck? A <strong>riddle</strong> about the film unlocks after your sixth guess.
           </li>
           <li>
-            After guess <strong>4</strong> and guess <strong>6</strong>, you can reveal any one
+            After guess <strong>3</strong> and guess <strong>4</strong>, you can reveal any one
             cell you choose.
           </li>
           <li>
