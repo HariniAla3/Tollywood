@@ -11,7 +11,7 @@ import type { Film } from './types'
  * deliberately: the hand-written riddles describe the plot closely enough
  * that an early reveal would end most puzzles on the spot.
  */
-export const RIDDLE_UNLOCK_AT = 6
+export const RIDDLE_UNLOCK_AT = 5
 
 /** Rank cutoffs (by vote count within the catalogue) for the fame clue. */
 const HUGELY_KNOWN = 25

@@ -146,7 +146,7 @@ describe('buildRiddle — hand-written overrides', () => {
     expect(buildRiddle(answer, catalogue, { f_a: '   ' })).toBe(generated)
   })
 
-  it('unlocks after six guesses', () => {
-    expect(RIDDLE_UNLOCK_AT).toBe(6)
+  it('unlocks after five guesses', () => {
+    expect(RIDDLE_UNLOCK_AT).toBe(5)
   })
 })
